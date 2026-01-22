@@ -17,6 +17,14 @@ public class FuelCodeDataInspector : Editor
         EditorGUILayout.PropertyField(serializedObject.FindProperty("codeGIS"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("fuelCodeID"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("baseColor"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("familyBrightness"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("familySaturation"));
+
+        var fc = (FuelCodeData)target;
+        using (new EditorGUI.DisabledScope(true))
+        {
+            EditorGUILayout.ColorField("Actual Color", fc.GetFamilyAdjustedColor());
+        }
 
         EditorGUILayout.Space();
         EditorGUILayout.PropertyField(serializedObject.FindProperty("hour1"));
@@ -33,7 +41,6 @@ public class FuelCodeDataInspector : Editor
         testSlope = EditorGUILayout.Slider("Slope Angle", testSlope, 0f, 90f);
         testMoisture = (MoistureState)EditorGUILayout.EnumPopup("Moisture", testMoisture);
 
-        var fc = (FuelCodeData)target;
         float ros = fc.CalculateROS(testWind, testMoisture);
         float flame = fc.CalculateFlameLength(testWind, testMoisture);
         float slopeFactor = fc.CalculateSlopeFactor(testSlope, testMoisture);

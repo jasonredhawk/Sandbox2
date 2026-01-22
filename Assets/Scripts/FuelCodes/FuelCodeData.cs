@@ -12,6 +12,12 @@ public class FuelCodeData : ScriptableObject
     public short fuelCodeID;
     public Color baseColor = Color.green;
 
+    [Header("Family Color Modifiers")]
+    [Tooltip("Multiplier applied to value (brightness) after contrast.")]
+    public float familyBrightness = 1f;
+    [Tooltip("Multiplier applied to saturation. 1 = no change.")]
+    public float familySaturation = 1f;
+
     [Header("Fuel Load (tons/acre)")]
     public float hour1 = 0f;
     public float hour10 = 0f;
@@ -81,5 +87,15 @@ public class FuelCodeData : ScriptableObject
         var c = GetSlopeCurve(moisture);
         if (c == null) return 1f;
         return c.EvaluateWithInput(slopeAngle, 0f, 90f);
+    }
+
+    public Color GetFamilyAdjustedColor()
+    {
+        Color.RGBToHSV(baseColor, out float h, out float s, out float v);
+        s = Mathf.Clamp01(s * familySaturation);
+        v = Mathf.Clamp01(v * familyBrightness);
+        Color outColor = Color.HSVToRGB(h, s, v);
+        outColor.a = 1f;
+        return outColor;
     }
 }

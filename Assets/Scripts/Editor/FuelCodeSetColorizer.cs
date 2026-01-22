@@ -25,9 +25,7 @@ public static class FuelCodeSetColorizer
             count++;
         }
 
-        EditorUtility.SetDirty(set);
-        AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
+        FuelCodeFamilyAutoTuner.Apply(set, 10f, MoistureState.Medium);
         EditorUtility.DisplayDialog("Colors Applied", $"Updated baseColor on {count} fuel codes.", "OK");
     }
 
@@ -60,4 +58,5 @@ public static class FuelCodeSetColorizer
             default: return new Color(0.6f, 0.7f, 0.6f, 1f);
         }
     }
+
 }

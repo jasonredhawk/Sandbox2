@@ -65,8 +65,10 @@ public class TerrainTile
             }
         }
 
-        meshObject.transform.parent = parent;
-        meshObject.transform.position = new Vector3(tileX * tileSize, 0f, -tileZ * tileSize);
+        meshObject.transform.SetParent(parent, false);
+        meshObject.transform.localPosition = new Vector3(tileX * tileSize, 0f, -tileZ * tileSize);
+        meshObject.transform.localRotation = Quaternion.identity;
+        meshObject.transform.localScale = Vector3.one;
     }
 
     /// <summary>
@@ -116,10 +118,21 @@ public class TerrainTile
             {
                 int hx = Mathf.Clamp(x, 0, tileSize - 1);
                 int hz = Mathf.Clamp(z, 0, tileSize - 1);
-                float h = heights[hx, hz] * heightScale;
+
+                int gx = tileX * tileSize + x;
+                int gz = tileZ * tileSize + z;
+                if (mapData != null)
+                {
+                    gx = Mathf.Clamp(gx, 0, Mathf.Max(0, mapData.xWidth - 1));
+                    gz = Mathf.Clamp(gz, 0, Mathf.Max(0, mapData.zWidth - 1));
+                }
+
+                float h = elevationLayer != null ? elevationLayer.GetElevation(gx, gz) * heightScale : heights[hx, hz] * heightScale;
                 vertices[v] = new Vector3(x, h, -z);
                 uvs[v] = new Vector2((float)x / tileWidth, (float)z / tileHeight);
-                colors[v] = GetFuelColor(fuels, hx, hz);
+                short fc = fuelCodeLayer != null ? fuelCodeLayer.GetFuelCode(gx, gz)
+                    : (fuels != null ? fuels[hx, hz] : (short)98);
+                colors[v] = GetFuelColor(fc);
                 v++;
             }
         }
@@ -160,6 +173,11 @@ public class TerrainTile
     {
         if (fuels == null) return new Color(0.6f, 0.7f, 0.6f, 1f);
         short fc = fuels[Mathf.Clamp(x, 0, fuels.GetLength(0) - 1), Mathf.Clamp(z, 0, fuels.GetLength(1) - 1)];
+        return GetFuelColor(fc);
+    }
+
+    private Color GetFuelColor(short fc)
+    {
         // Special categories
         if (fc == 98) return new Color(0.6f, 0.7f, 0.6f, 1f);
         if (FuelCodeLayer.IsRoad(fc)) return Color.black;
@@ -172,21 +190,29 @@ public class TerrainTile
         if (data != null) baseColor = data.baseColor;
         baseColor.a = 1f; // ensure opaque vertex colors
 
-        // Saturation by flame length, brightness by ROS
+        // Saturation by ROS, brightness by flame length (with family modifiers)
         float wind = gameManager != null ? gameManager.windSpeed : 10f;
         MoistureState moisture = gameManager != null ? gameManager.moistureState : MoistureState.Medium;
         float flame = data != null ? data.CalculateFlameLength(wind, moisture) : 1f;
         float ros = data != null ? data.CalculateROS(wind, moisture) : 1f;
         float flameMax = data != null && data.GetFlameCurve(moisture) != null ? data.GetFlameCurve(moisture).max : 10f;
         float rosMax = data != null && data.GetROSCurve(moisture) != null ? data.GetROSCurve(moisture).max : 10f;
-        float sat = Mathf.Clamp01(flameMax > 0 ? flame / flameMax : 0.5f);
-        float val = Mathf.Clamp01(rosMax > 0 ? ros / rosMax : 0.5f);
+        float sat = Mathf.Clamp01(rosMax > 0 ? ros / rosMax : 0.5f);
+        float val = Mathf.Clamp01(flameMax > 0 ? flame / flameMax : 0.5f);
 
         Color.RGBToHSV(baseColor, out float h, out float s, out float v);
-        s = Mathf.Lerp(0.3f, 1f, sat);
+        s = Mathf.Lerp(0.15f, 1f, sat);
         v = Mathf.Lerp(0.4f, 1f, val);
+        ApplyFamilyModifiers(data, ref s, ref v);
         Color outColor = Color.HSVToRGB(h, s, v);
         outColor.a = 1f; // keep fully opaque
         return outColor;
+    }
+
+    private static void ApplyFamilyModifiers(FuelCodeData data, ref float s, ref float v)
+    {
+        if (data == null) return;
+        s = Mathf.Clamp01(s * data.familySaturation);
+        v = Mathf.Clamp01(v * data.familyBrightness);
     }
 }

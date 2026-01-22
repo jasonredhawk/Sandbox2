@@ -65,10 +65,8 @@ public static class FuelCodeSetImporter
 
         Object.DestroyImmediate(temp);
 
-        EditorUtility.SetDirty(set);
-        AssetDatabase.SaveAssets();
+        FuelCodeFamilyAutoTuner.Apply(set, 10f, MoistureState.Medium);
         AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
-        AssetDatabase.Refresh();
         EditorUtility.DisplayDialog("Import complete", "Fuel codes imported into the selected FuelCodeSet (as subassets).", "OK");
     }
 
@@ -100,4 +98,5 @@ public static class FuelCodeSetImporter
             default: return new Color(0.6f, 0.7f, 0.6f, 1f);
         }
     }
+
 }
