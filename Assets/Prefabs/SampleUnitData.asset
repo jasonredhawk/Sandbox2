@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed9f05039cf5d0d4cb4aca1b6bb40c81, type: 3}
+  m_Name: SampleUnitData
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  id: unit_sample
+  displayName: Sample Unit
+  unitType: groundcrew
+  agency: groundcrew
+  moveSpeed: 5
+  cutSpeed: 1
+  maxSlope: 35
+  waterCapacity: 500
+  waterInputAmount: 50
+  waterOutputAmount: 50
+  suppressionSpeed: 10
+  effectiveRadius: 30
+  terrainSpeedFactors: []
+  cutSpeedFactors: []

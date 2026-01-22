@@ -1,0 +1,27 @@
+### Unity ###
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+
+# Asset metadata should be tracked
+!.meta
+
+# JetBrains Rider / VS / VSCode
+.idea/
+.vs/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Crash reports
+sysinfo.txt
+
+# Unity Package Manager
+/Library/PackageCache/
