@@ -43,24 +43,25 @@ public class TerrainTile
         meshRenderer = meshObject.AddComponent<MeshRenderer>();
         meshFilter = meshObject.AddComponent<MeshFilter>();
 
-        // Always use a vertex-color aware shader so fuel colors show.
-        var vc = Shader.Find("Sprites/Default"); // supports vertex colors
+        // Use an opaque, vertex-color shader so colors show without transparency.
+        var vcOpaque = Shader.Find("Custom/URPVertexColorOpaque");
+        var vcFallback = Shader.Find("Sprites/Default"); // supports vertex colors but is transparent
         if (material == null || material.shader == null || material.shader.name.Contains("Universal Render Pipeline"))
         {
-            var mat = new Material(vc != null ? vc : Shader.Find("Standard"));
+            var mat = new Material(vcOpaque != null ? vcOpaque : (vcFallback != null ? vcFallback : Shader.Find("Standard")));
             meshRenderer.sharedMaterial = mat;
         }
         else
         {
             // If a non-vertex-color shader is used, colors won't show. Replace with vertex color shader.
-            if (!material.shader.name.Contains("Sprites/Default"))
+            if (material.shader.name.Contains("Custom/URPVertexColorOpaque"))
             {
-                var mat = new Material(vc != null ? vc : Shader.Find("Standard"));
-                meshRenderer.sharedMaterial = mat;
+                meshRenderer.sharedMaterial = material;
             }
             else
             {
-                meshRenderer.sharedMaterial = material;
+                var mat = new Material(vcOpaque != null ? vcOpaque : (vcFallback != null ? vcFallback : Shader.Find("Standard")));
+                meshRenderer.sharedMaterial = mat;
             }
         }
 
@@ -169,6 +170,7 @@ public class TerrainTile
         Color baseColor = new Color(0.6f, 0.7f, 0.6f, 1f);
         FuelCodeData data = fuelCodeSet != null ? fuelCodeSet.GetFuelCode(fc) : null;
         if (data != null) baseColor = data.baseColor;
+        baseColor.a = 1f; // ensure opaque vertex colors
 
         // Saturation by flame length, brightness by ROS
         float wind = gameManager != null ? gameManager.windSpeed : 10f;
@@ -183,6 +185,8 @@ public class TerrainTile
         Color.RGBToHSV(baseColor, out float h, out float s, out float v);
         s = Mathf.Lerp(0.3f, 1f, sat);
         v = Mathf.Lerp(0.4f, 1f, val);
-        return Color.HSVToRGB(h, s, v);
+        Color outColor = Color.HSVToRGB(h, s, v);
+        outColor.a = 1f; // keep fully opaque
+        return outColor;
     }
 }

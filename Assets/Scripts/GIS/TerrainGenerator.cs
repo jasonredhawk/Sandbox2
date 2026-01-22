@@ -22,6 +22,9 @@ public class TerrainGenerator : MonoBehaviour
     public Material terrainMaterial;
 
     private readonly Dictionary<Vector2Int, TerrainTile> tiles = new Dictionary<Vector2Int, TerrainTile>();
+#if UNITY_EDITOR
+    private bool rebuildQueued;
+#endif
 
     void Start()
     {
@@ -76,7 +79,7 @@ public class TerrainGenerator : MonoBehaviour
         EnsureMaterial();
         if (mapData != null && mapData.xWidth > 0 && mapData.zWidth > 0)
         {
-            BuildAllTilesImmediate();
+            QueueRebuild();
         }
     }
 
@@ -89,6 +92,20 @@ public class TerrainGenerator : MonoBehaviour
         if (stage != null && stage.IsPartOfPrefabContents(gameObject)) return true;
 #endif
         return false;
+    }
+
+    private void QueueRebuild()
+    {
+        if (rebuildQueued) return;
+        rebuildQueued = true;
+        EditorApplication.delayCall += () =>
+        {
+            rebuildQueued = false;
+            if (this == null) return;
+            if (Application.isPlaying) return;
+            if (IsInPrefabMode()) return;
+            BuildAllTilesImmediate();
+        };
     }
 #endif
 
