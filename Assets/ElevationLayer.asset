@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: ElevationLayer
   m_EditorClassIdentifier: Assembly-CSharp::ElevationLayer
   layerName: 
-  width: 0
-  height: 0
-  tileSize: 256
-  startLongitudeMeter: 0
-  startLatitudeMeter: 0
-  longitudeMeterStep: 30
-  latitudeMeterStep: 30
+  width: 31231
+  height: 26281
+  tileSize: 122
+  startLongitudeMeter: -1555470
+  startLatitudeMeter: 2715270
+  longitudeMeterStep: 1
+  latitudeMeterStep: -1
