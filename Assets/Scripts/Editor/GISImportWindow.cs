@@ -31,11 +31,14 @@ public class GISImportWindow : EditorWindow
     private string elevationXYZPath;
     private string fuelXYZPath;
     private bool xyzAutoDetectBounds = true;
+    private const short XYZ_NO_DATA = 32767;
+    private short noDataElevation = 0;
+    private short noDataFuelCode = 98;
 
     [Header("Geo Settings")]
     private int startLongitudeMeter = 0;
     private int startLatitudeMeter = 0;
-    private int meterStep = 1;
+    private int meterStep = 30;
     private int tileSize = 122;
     private bool flipVertical = true;
     private bool negativeLatitudeStep = true;
@@ -46,6 +49,8 @@ public class GISImportWindow : EditorWindow
         Hsv = 1
     }
 
+    private Vector2 scrollPosition;
+
     [MenuItem("Tools/GIS Importer")]
     public static void Open()
     {
@@ -54,6 +59,8 @@ public class GISImportWindow : EditorWindow
 
     private void OnGUI()
     {
+        scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+
         EditorGUILayout.LabelField("Targets", EditorStyles.boldLabel);
         mapData = (MapData)EditorGUILayout.ObjectField("Map Data", mapData, typeof(MapData), true);
         elevationLayer = (ElevationLayer)EditorGUILayout.ObjectField("Elevation Layer", elevationLayer, typeof(ElevationLayer), false);
@@ -131,6 +138,9 @@ public class GISImportWindow : EditorWindow
         elevationXYZ = (TextAsset)EditorGUILayout.ObjectField("Elevation XYZ (optional)", elevationXYZ, typeof(TextAsset), false);
         fuelXYZ = (TextAsset)EditorGUILayout.ObjectField("Fuel XYZ (optional)", fuelXYZ, typeof(TextAsset), false);
         xyzAutoDetectBounds = EditorGUILayout.Toggle("Auto-Detect Bounds", xyzAutoDetectBounds);
+        EditorGUILayout.HelpBox("Value 32767 = no data → flat elevation (0) and no fuel (98). Each X,Z step = 30m.", MessageType.None);
+        noDataElevation = (short)EditorGUILayout.IntField("No-Data Elevation (flat)", noDataElevation);
+        noDataFuelCode = (short)EditorGUILayout.IntField("No-Data Fuel Code", noDataFuelCode);
 
         using (new EditorGUILayout.HorizontalScope())
         {
@@ -160,6 +170,8 @@ public class GISImportWindow : EditorWindow
                 ImportXYZ();
             }
         }
+
+        EditorGUILayout.EndScrollView();
     }
 
     private bool IsReadyForRaster()
@@ -243,6 +255,10 @@ public class GISImportWindow : EditorWindow
             }
         }
 
+        // Sync runtime data to serialized format for persistence
+        elevationLayer.MarkDirty();
+        fuelCodeLayer.MarkDirty();
+
         EditorUtility.SetDirty(elevationLayer);
         EditorUtility.SetDirty(fuelCodeLayer);
         EditorUtility.SetDirty(mapData);
@@ -302,7 +318,10 @@ public class GISImportWindow : EditorWindow
 
     private void InitializeMapFromXYZ(string elevText, string fuelText, out int elevationCount, out int fuelCount)
     {
-        if (meterStep <= 0) meterStep = 1;
+        // XYZ files use 30m grid steps; use this for dimensions and layer metadata
+        int xyzMeterStep = meterStep > 0 ? meterStep : 30;
+        if (xyzMeterStep <= 0) xyzMeterStep = 30;
+        meterStep = xyzMeterStep;
         mapData.tileSize = tileSize > 0 ? tileSize : mapData.tileSize;
 
         if (xyzAutoDetectBounds)
@@ -325,24 +344,32 @@ public class GISImportWindow : EditorWindow
             startLongitudeMeter = minX;
             startLatitudeMeter = negativeLatitudeStep ? maxZ : minZ;
 
-            int width = Mathf.Max(1, Mathf.CeilToInt((maxX - minX) / (float)meterStep) + 1);
-            int height = Mathf.Max(1, Mathf.CeilToInt((maxZ - minZ) / (float)meterStep) + 1);
+            // Dimensions from coordinate range: each (x,z) step = xyzMeterStep (30m)
+            int width = Mathf.Max(1, Mathf.RoundToInt((maxX - minX) / (float)xyzMeterStep) + 1);
+            int height = Mathf.Max(1, Mathf.RoundToInt((maxZ - minZ) / (float)xyzMeterStep) + 1);
             InitializeMap(width, height);
         }
         else
         {
-            // Parse to infer width/height from max indices (uses start/meterStep)
             int maxX = 0;
             int maxZ = 0;
-            ParseXYZBounds(elevText, ref maxX, ref maxZ);
-            ParseXYZBounds(fuelText, ref maxX, ref maxZ);
+            ParseXYZBounds(elevText, ref maxX, ref maxZ, xyzMeterStep);
+            ParseXYZBounds(fuelText, ref maxX, ref maxZ, xyzMeterStep);
             int width = maxX + 1;
             int height = maxZ + 1;
             InitializeMap(width, height);
         }
 
-        elevationCount = ParseXYZIntoLayer(elevText, true);
-        fuelCount = ParseXYZIntoLayer(fuelText, false);
+        // Pre-fill entire grid: flat elevation (0) and no fuel (98). Then we overwrite only real data.
+        elevationLayer.Fill(mapData.xWidth, mapData.zWidth, noDataElevation);
+        fuelCodeLayer.Fill(mapData.xWidth, mapData.zWidth, noDataFuelCode);
+
+        elevationCount = ParseXYZIntoLayer(elevText, true, xyzMeterStep);
+        fuelCount = ParseXYZIntoLayer(fuelText, false, xyzMeterStep);
+
+        // Sync runtime data to serialized format for persistence
+        elevationLayer.MarkDirty();
+        fuelCodeLayer.MarkDirty();
 
         EditorUtility.SetDirty(elevationLayer);
         EditorUtility.SetDirty(fuelCodeLayer);
@@ -369,7 +396,7 @@ public class GISImportWindow : EditorWindow
         }
     }
 
-    private void ParseXYZBounds(string text, ref int maxX, ref int maxZ)
+    private void ParseXYZBounds(string text, ref int maxX, ref int maxZ, int step)
     {
         using (var reader = new System.IO.StringReader(text))
         {
@@ -378,17 +405,17 @@ public class GISImportWindow : EditorWindow
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (!TryParseXYZLine(line, out int xMeter, out int zMeter, out _)) continue;
-                int x = (xMeter - startLongitudeMeter) / meterStep;
+                int x = (xMeter - startLongitudeMeter) / step;
                 int z = negativeLatitudeStep
-                    ? (startLatitudeMeter - zMeter) / meterStep
-                    : (zMeter - startLatitudeMeter) / meterStep;
+                    ? (startLatitudeMeter - zMeter) / step
+                    : (zMeter - startLatitudeMeter) / step;
                 if (x > maxX) maxX = x;
                 if (z > maxZ) maxZ = z;
             }
         }
     }
 
-    private int ParseXYZIntoLayer(string text, bool isElevation)
+    private int ParseXYZIntoLayer(string text, bool isElevation, int xyzMeterStep)
     {
         int count = 0;
         using (var reader = new System.IO.StringReader(text))
@@ -404,10 +431,18 @@ public class GISImportWindow : EditorWindow
                 if (!TryParseXYZLine(line, out int xMeter, out int zMeter, out float value)) continue;
                 short shortValue = (short)Mathf.RoundToInt(value);
 
-                int x = (xMeter - startLongitudeMeter) / meterStep;
+                // 32767 and -9999 = no data: flat elevation (0) and no fuel (98)
+                bool isNoData = (shortValue == XYZ_NO_DATA || shortValue == -9999);
+                if (isNoData)
+                {
+                    shortValue = isElevation ? noDataElevation : noDataFuelCode;
+                }
+
+                // Pixel index from coordinate: each step = xyzMeterStep (30m)
+                int x = (xMeter - startLongitudeMeter) / xyzMeterStep;
                 int z = negativeLatitudeStep
-                    ? (startLatitudeMeter - zMeter) / meterStep
-                    : (zMeter - startLatitudeMeter) / meterStep;
+                    ? (startLatitudeMeter - zMeter) / xyzMeterStep
+                    : (zMeter - startLatitudeMeter) / xyzMeterStep;
                 if (x < 0 || z < 0 || x >= mapData.xWidth || z >= mapData.zWidth) continue;
 
                 if (isElevation)
