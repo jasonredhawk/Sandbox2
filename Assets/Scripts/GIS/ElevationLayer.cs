@@ -18,29 +18,32 @@ public class ElevationLayer : GISDataLayer
         public short[] data; // flattened 2D array
 
         public TileEntry() { }
-        public TileEntry(int x, int z, int size, short[,] arr)
+        public TileEntry(int x, int z, short[,] arr)
         {
             tileX = x;
             tileZ = z;
-            this.size = size;
-            data = Flatten(arr, size);
+            int w = arr.GetLength(0);
+            int h = arr.GetLength(1);
+            size = w;
+            data = Flatten(arr, w, h);
         }
 
         public short[,] ToArray()
         {
-            var arr = new short[size, size];
+            int h = data.Length > 0 && size > 0 ? data.Length / size : size;
+            var arr = new short[size, h];
             for (int i = 0; i < size; i++)
-                for (int j = 0; j < size; j++)
-                    arr[i, j] = data[i * size + j];
+                for (int j = 0; j < h; j++)
+                    arr[i, j] = data[i * h + j];
             return arr;
         }
 
-        private static short[] Flatten(short[,] arr, int size)
+        private static short[] Flatten(short[,] arr, int w, int h)
         {
-            var flat = new short[size * size];
-            for (int i = 0; i < size; i++)
-                for (int j = 0; j < size; j++)
-                    flat[i * size + j] = arr[i, j];
+            var flat = new short[w * h];
+            for (int i = 0; i < w; i++)
+                for (int j = 0; j < h; j++)
+                    flat[i * h + j] = arr[i, j];
             return flat;
         }
     }
@@ -72,10 +75,10 @@ public class ElevationLayer : GISDataLayer
     private void SyncToSerialized()
     {
         serializedTiles.Clear();
-        int effectiveSize = tileSize > 0 ? tileSize : 122;
         foreach (var kvp in tiles)
         {
-            serializedTiles.Add(new TileEntry(kvp.Key.x, kvp.Key.y, effectiveSize, kvp.Value));
+            if (kvp.Value == null) continue;
+            serializedTiles.Add(new TileEntry(kvp.Key.x, kvp.Key.y, kvp.Value));
         }
     }
 
@@ -87,7 +90,8 @@ public class ElevationLayer : GISDataLayer
         var local = GetLocalCoord(x, z);
         if (tiles.TryGetValue(tileCoord, out var tile))
         {
-            return tile[local.x, local.y];
+            if (local.x >= 0 && local.x < tile.GetLength(0) && local.y >= 0 && local.y < tile.GetLength(1))
+                return tile[local.x, local.y];
         }
         return (short)0;
     }
@@ -98,9 +102,24 @@ public class ElevationLayer : GISDataLayer
         if (tileSize <= 0) tileSize = 122;
         var tileCoord = GetTileCoord(x, z);
         var local = GetLocalCoord(x, z);
+        int size = tileSize;
         if (!tiles.ContainsKey(tileCoord))
         {
-            tiles[tileCoord] = new short[tileSize, tileSize];
+            tiles[tileCoord] = new short[size, size];
+        }
+        else
+        {
+            var existing = tiles[tileCoord];
+            if (existing.GetLength(0) != size || existing.GetLength(1) != size)
+            {
+                var newTile = new short[size, size];
+                int copyW = Mathf.Min(size, existing.GetLength(0));
+                int copyH = Mathf.Min(size, existing.GetLength(1));
+                for (int i = 0; i < copyW; i++)
+                    for (int j = 0; j < copyH; j++)
+                        newTile[i, j] = existing[i, j];
+                tiles[tileCoord] = newTile;
+            }
         }
         tiles[tileCoord][local.x, local.y] = (short)value;
         SyncToSerialized();
@@ -133,9 +152,24 @@ public class ElevationLayer : GISDataLayer
         if (tileSize <= 0) tileSize = 122;
         var tileCoord = GetTileCoord(x, z);
         var local = GetLocalCoord(x, z);
+        int size = tileSize;
         if (!tiles.ContainsKey(tileCoord))
         {
-            tiles[tileCoord] = new short[tileSize, tileSize];
+            tiles[tileCoord] = new short[size, size];
+        }
+        else
+        {
+            var existing = tiles[tileCoord];
+            if (existing.GetLength(0) != size || existing.GetLength(1) != size)
+            {
+                var newTile = new short[size, size];
+                int copyW = Mathf.Min(size, existing.GetLength(0));
+                int copyH = Mathf.Min(size, existing.GetLength(1));
+                for (int i = 0; i < copyW; i++)
+                    for (int j = 0; j < copyH; j++)
+                        newTile[i, j] = existing[i, j];
+                tiles[tileCoord] = newTile;
+            }
         }
         tiles[tileCoord][local.x, local.y] = elevation;
         // Don't sync on every pixel - caller should call MarkDirty() when done

@@ -60,7 +60,8 @@ public class GISImportWindow : EditorWindow
     private void OnGUI()
     {
         scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
-
+        try
+        {
         EditorGUILayout.LabelField("Targets", EditorStyles.boldLabel);
         mapData = (MapData)EditorGUILayout.ObjectField("Map Data", mapData, typeof(MapData), true);
         elevationLayer = (ElevationLayer)EditorGUILayout.ObjectField("Elevation Layer", elevationLayer, typeof(ElevationLayer), false);
@@ -170,8 +171,11 @@ public class GISImportWindow : EditorWindow
                 ImportXYZ();
             }
         }
-
-        EditorGUILayout.EndScrollView();
+        }
+        finally
+        {
+            EditorGUILayout.EndScrollView();
+        }
     }
 
     private bool IsReadyForRaster()
@@ -359,6 +363,10 @@ public class GISImportWindow : EditorWindow
             int height = maxZ + 1;
             InitializeMap(width, height);
         }
+
+        // Clear any stale cached tiles (e.g. from a smaller previous tile size) so Fill uses current dimensions.
+        elevationLayer.ClearCache();
+        fuelCodeLayer.ClearCache();
 
         // Pre-fill entire grid: flat elevation (0) and no fuel (98). Then we overwrite only real data.
         elevationLayer.Fill(mapData.xWidth, mapData.zWidth, noDataElevation);
